@@ -1,0 +1,144 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "darwin-arm64"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum ActivityStatus {
+  pending
+  completed
+  canceled
+}
+
+enum RepeatUnit {
+  day
+  week
+}
+
+enum RepeatEndType {
+  never
+  date
+  occurrences
+}
+
+enum RepeatFrequency {
+  day
+  week
+}
+
+model User {
+  id          String     @id @default(uuid())
+  name        String
+  phone       String?    @unique
+  email       String?    @unique
+  description String?
+  tags        String[]   @default([])
+  status      UserStatus @default(active)
+  createdAt   DateTime   @default(now())
+
+  activities ActivityUsers[]
+}
+
+model AdminAccount {
+  id                String   @id @default(uuid())
+  name              String   @default("") // not optional
+  email             String   @unique @default("") // unique, required
+  phone             String   @default("") // not unique
+  temporaryPassword String
+  createdAt         DateTime @default(now())
+}
+
+model MessageTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  category     String
+  templateBody String
+  createdAt    DateTime @default(now())
+
+  activities Activity[]
+}
+
+model Activity {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  createdAt   DateTime       @default(now())
+  status      ActivityStatus @default(pending)
+
+  // repetição
+  isRepeating       Boolean       @default(false)
+  repeatInterval    Int           @default(1)
+  repeatUnit        RepeatUnit    @default(day)
+  repeatStartDate   DateTime? // Data de início para tarefas repetitivas
+  repeatEndType     RepeatEndType @default(never)
+  repeatEndDate     DateTime? // Data de fim para tarefas repetitivas
+  repeatOccurrences Int?
+  repeatDaysOfWeek  Int[]         @default([]) // Dias da semana para repetição semanal (0=Segunda, 6=Domingo)
+
+  // data e hora
+  scheduledDate DateTime? // Data+hora completa para tarefas únicas
+  scheduledTime String? // Apenas hora (HH:MM) para tarefas repetitivas
+
+  // mensagem whatsapp
+  messageTemplate   MessageTemplate? @relation(fields: [messageTemplateId], references: [id])
+  messageTemplateId String?
+  customMessage     String?
+  messageString     String?
+
+  // roles (renamed from tags)
+  roles String[] @default([])
+
+  users ActivityUsers[]
+}
+
+model ActivityUsers {
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activityId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+
+  @@id([activityId, userId])
+}
+
+model WorkShift {
+  id                 String   @id @default(uuid())
+  title              String // Nome do turno (ex: "Início do turno")
+  time               String // Horário em formato HH:MM
+  messageString      String? // Mensagem com variáveis {{NOME}}, {{TAREFAS}}
+  alertMinutesBefore Int      @default(5) // Minutos antes para alerta
+  createdAt          DateTime @default(now())
+}
+
+model AdminReminder {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String?  @default("pending") // Status: pending, completed, canceled
+  createdAt   DateTime @default(now())
+
+  // Repetition (same structure as Activity) - all optional for flexibility
+  isRepeating       Boolean?         @default(false)
+  repeatInterval    Int?             @default(1)
+  repeatUnit        RepeatFrequency? @default(day)
+  repeatStartDate   DateTime? // Start date for repeating reminders
+  repeatEndType     RepeatEndType?   @default(never)
+  repeatEndDate     DateTime? // End date for repeating reminders
+  repeatOccurrences Int?
+  repeatDaysOfWeek  Int[]            @default([]) // Dias da semana para repetição semanal (0=Segunda, 6=Domingo)
+
+  // Date and time
+  scheduledDate DateTime? // Full date+time for one-time reminders
+  scheduledTime String? // Time only (HH:MM) for repeating reminders
+
+  // Message
+  messageString String? // The actual reminder message to be sent
+}
